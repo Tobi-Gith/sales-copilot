@@ -15,9 +15,25 @@ def get_vector_store():
 
 collection = get_vector_store()
 
-question = st.text_input("Deine Frage an die Dokumentation:")
+# Chat-Verlauf initialisieren (nur beim allerersten Laden der Seite)
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Bisherigen Verlauf anzeigen
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+
+# Neue Nutzereingabe entgegennehmen
+question = st.chat_input("Deine Frage an die Dokumentation:")
 
 if question:
+    # Nutzerfrage sofort anzeigen und im Verlauf speichern
+    st.session_state.messages.append({"role": "user", "content": question})
+    with st.chat_message("user"):
+        st.write(question)
+
+    # Retrieval
     q_embedding = client.embeddings.create(
         model="text-embedding-3-small", input=question
     ).data[0].embedding
@@ -41,6 +57,11 @@ if question:
             {"role": "user", "content": f"Kontext:\n{context}\n\nFrage: {question}"}
         ]
     )
+    answer = response.choices[0].message.content
+    sources_line = "\n\n*Quellen: " + ", ".join(set(sources)) + "*"
+    full_answer = answer + sources_line
 
-    st.write(response.choices[0].message.content)
-    st.caption("Quellen: " + ", ".join(set(sources)))
+    # Antwort anzeigen und im Verlauf speichern
+    st.session_state.messages.append({"role": "assistant", "content": full_answer})
+    with st.chat_message("assistant"):
+        st.write(full_answer)
