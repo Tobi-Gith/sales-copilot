@@ -82,7 +82,22 @@ An example for service mapping on the Azure infrastructure could be the followin
 
 ## 6. Security, Governance, responsible-AI controls
 
-TODO 
+The client raised 5 specific concerns which are addressed as follows:
+
+| Concern | approach |
+| --- | --- |
+| data confidentiality | Only synthetic documents in prototype. Data is logged without confidential information by finding and replacing it with placeholders using RegEx. In reality, data would remain in Hyperscaler tenant, no training on documents. |
+| access controlls | Not implemented in prototype, because only synthetic documents. In reality there is a login which controlls for access permissions (e.g. metadata tags per document) |
+| hallucinations | Addressed via grounded RAG prompting, citations of sources and in the agentic workflow with the precedence given to verified facts (see section 4) |
+| operational ownership | There should be a cross-functional AI-platform team monitoring and updating the system. |
+| vendor lock-in | the client is isolated behind the application's own functions (ingest.py, agent.py) which makes swapping relatively easy. |
+
+Responsibility and transparency is in general also adressd by the telemetry which lets you track everything down to the sources.
+
+**Secrets management:** The API key is stored in local `.env` file which is excluded from version control via `.gitignore` and never hard-coded. On the streamlit community cloud it is stored in the platform's separate "secrets" section. This can also be done in e.g. Azure or other hyperscaler services.
+
+**Logging:** Every RAG query logs the prompt, retrieved sources, and response. Every agentic workflow run logs the extracted/selected part number, stock result, and any error. The human approval decision (approved/rejected) is logged separately from the automated run. Errors in either flow are caught and logged with the error message. All entries are timestamped in `Europe/Berlin` local time and written as JSON Lines (`logs.jsonl`).
+
 
 ## 7. Limitations, trade-offs, and next improvements
 
