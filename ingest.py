@@ -8,7 +8,6 @@ load_dotenv()
 client = OpenAI()
 
 def load_and_chunk_documents(folder="documents", chunk_size=500, overlap=50):
-    """Liest alle PDFs ein, extrahiert Text und zerlegt ihn in ueberlappende Chunks."""
     all_chunks = []
     for filepath in glob.glob(f"{folder}/*.pdf"):
         reader = PdfReader(filepath)
@@ -25,7 +24,6 @@ def load_and_chunk_documents(folder="documents", chunk_size=500, overlap=50):
     return all_chunks
 
 def build_vector_store(chunks):
-    """Erstellt eine In-Memory ChromaDB-Collection und befuellt sie mit Embeddings."""
     chroma_client = chromadb.Client()
     collection = chroma_client.get_or_create_collection("docs")
     for i, chunk in enumerate(chunks):

@@ -2,6 +2,7 @@ import streamlit as st
 from openai import OpenAI
 from dotenv import load_dotenv
 from ingest import load_and_chunk_documents, build_vector_store
+from logging_utils import log_event, mask_pii
 
 load_dotenv()
 client = OpenAI()
@@ -53,6 +54,11 @@ if question:
         ]
     )
     answer = response.choices[0].message.content
+    log_event("rag_query", {
+        "prompt": mask_pii(question),
+        "retrieved_sources": list(set(sources)),
+        "response": mask_pii(answer),
+    })
     sources_line = "\n\n*Quellen: " + ", ".join(set(sources)) + "*"
     full_answer = answer + sources_line
 
