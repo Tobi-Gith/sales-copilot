@@ -19,9 +19,22 @@ collection = get_vector_store()
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-for message in st.session_state.messages:
+if "feedback_given" not in st.session_state:
+    st.session_state.feedback_given = set()
+
+for i, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         st.write(message["content"])
+        if message["role"] == "assistant" and i not in st.session_state.feedback_given:
+            col1, col2 = st.columns([1, 10])
+            if col1.button("👍", key=f"up_{i}"):
+                log_event("user_feedback", {"message_index": i, "feedback": "positive"})
+                st.session_state.feedback_given.add(i)
+                st.rerun()
+            if col2.button("👎", key=f"down_{i}"):
+                log_event("user_feedback", {"message_index": i, "feedback": "negative"})
+                st.session_state.feedback_given.add(i)
+                st.rerun()
 
 question = st.chat_input("Deine Frage an die Dokumentation:")
 
@@ -30,38 +43,48 @@ if question:
     with st.chat_message("user"):
         st.write(question)
 
-    q_embedding = client.embeddings.create(
-        model="text-embedding-3-small", input=question
-    ).data[0].embedding
+    try:
+        q_embedding = client.embeddings.create(
+            model="text-embedding-3-small", input=question
+        ).data[0].embedding
 
-    results = collection.query(query_embeddings=[q_embedding], n_results=3)
-    chunks = results["documents"][0]
-    sources = [m["source"] for m in results["metadatas"][0]]
-    context = "\n\n".join(f"[Quelle: {s}]\n{c}" for s, c in zip(sources, chunks))
+        results = collection.query(query_embeddings=[q_embedding], n_results=3)
+        chunks = results["documents"][0]
+        sources = [m["source"] for m in results["metadatas"][0]]
+        context = "\n\n".join(f"[Quelle: {s}]\n{c}" for s, c in zip(sources, chunks))
 
-    system_prompt = (
-        "Du bist ein Assistent fuer Vertriebs- und Servicemitarbeiter. "
-        "Antworte ausschliesslich basierend auf dem gegebenen Kontext. "
-        "Wenn die Information nicht im Kontext steht, sage das explizit "
-        "statt zu raten. Nenne bei jeder Aussage die Quelle in eckigen Klammern."
-    )
+        system_prompt = (
+            "Du bist ein Assistent fuer Vertriebs- und Servicemitarbeiter. "
+            "Antworte ausschliesslich basierend auf dem gegebenen Kontext. "
+            "Wenn die Information nicht im Kontext steht, sage das explizit "
+            "statt zu raten. Nenne bei jeder Aussage die Quelle in eckigen Klammern."
+        )
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"Kontext:\n{context}\n\nFrage: {question}"}
-        ]
-    )
-    answer = response.choices[0].message.content
-    log_event("rag_query", {
-        "prompt": mask_pii(question),
-        "retrieved_sources": list(set(sources)),
-        "response": mask_pii(answer),
-    })
-    sources_line = "\n\n*Quellen: " + ", ".join(set(sources)) + "*"
-    full_answer = answer + sources_line
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Kontext:\n{context}\n\nFrage: {question}"}
+            ]
+        )
+        answer = response.choices[0].message.content
+        sources_line = "\n\n*Quellen: " + ", ".join(set(sources)) + "*"
+        full_answer = answer + sources_line
 
-    st.session_state.messages.append({"role": "assistant", "content": full_answer})
-    with st.chat_message("assistant"):
-        st.write(full_answer)
+        log_event("rag_query", {
+            "prompt": mask_pii(question),
+            "retrieved_sources": list(set(sources)),
+            "response": mask_pii(answer),
+        })
+
+        st.session_state.messages.append({"role": "assistant", "content": full_answer})
+        st.rerun()
+
+    except Exception as e:
+        log_event("error", {
+            "prompt": mask_pii(question),
+            "error_message": str(e),
+        })
+        error_msg = "Entschuldigung, bei der Verarbeitung deiner Frage ist ein Fehler aufgetreten. Bitte versuche es erneut."
+        st.session_state.messages.append({"role": "assistant", "content": error_msg})
+        st.rerun()
