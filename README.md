@@ -11,11 +11,11 @@ It is combined with an agentic workflow for automatically drafting a customer-se
 | --- | --- | --- |
 | Frontend | Streamlit | Enables a working chat UI in pure python within the given time budget |
 | LLM and embeddings | OpenAI API ('gpt-4o-mini' and 'text-embedding-3-small') | fast, low-cost, combines text generation and embedding in one provider |
-| Agent framework | --- | --- |
+| Agent framework | LangGraph | structured approach with nodes allowing for failure handling, more realistic enterprise styls approach |
 | Vector Store | ChromaDB (in-memory) | Runs entirely locally without external service etc., so minimal setup friction. In-memory because of avoiding persistence issues on streamlit community cloud when restarting |
 | Document parsing | pypdf | allows using real pdf documents, which is more realistic and better for demonstration in front of the client |
 
-**Prototype vs target architecture:** The protoype intentionally runs on a single cloud-hosted Streamlit app with one API-key. Section 5 describes how this would map to proper hyperscaler deployment.
+**Prototype vs target architecture:** During development the prototype runs locally via `streamlit run app.py`. For submission it is additionally deployed to Streamlit Community cloud with a single shared API key, giving a publicly accessible URL. Section 5 describes how this would map to a proper hyperscaler deployment in production.
 
 ## 3. RAG implementation
 
@@ -31,15 +31,54 @@ It is combined with an agentic workflow for automatically drafting a customer-se
 
 **Citations:** Each answer displays the set of the 3 documents used as sources with their respective names. Also the system prompt states to always name the source where the explicit infomation is taken from at each statement.
 
-**Evaluation approach:** TODO
+**Evaluation approach:** The system was manually tested against three categories of questions, corresponding to the three test cases in the document set. 
+
+| Example question | Category | Result |
+| --- | --- | --- |
+| "Welche Betriebstemperatur verträgt die Pumpe X-123?" | single document required | correct answer, correctly cited to product data sheet only |
+| "Was kostet die Pumpe X-123 und wie oft muss sie gewartet werden?" | two documents required | correct answer, correctly cited |
+| "Welche Farbe hat die Pumpe X-123?" | Unanswerable | correctly stated that information is not available instead of guessing |
+
+No automated evaluation framework was set up given the time budget. This is noted as one of the next steps in section 7.
+
 
 ## 4. Agentic workflow
 
-TODO
+**Scenario:** A customer service employee receives a customer question about a spare part. The workflow checks the (simulated) inventory for the relevant part and drafts a customer-facing response, which a human must approve before it is considered "sent".
+
+**Steps (LangGraph nodes):** 
+
+1. **`Extract part number`** - customers text question is passed to LLM which looks for the product number involved and returns it in JSON format (`response_format={"type": "json_object"}`). If no suitable product number is found by the LLM, a human needs to select the correct product number.
+2. **`check_inventory`** - Looks up the extracted part number in the simulated inventory dictionary. This is wrapped in a retry loop with up to 2 retries to demonstrate resilience against transient failure. 
+3. **`draft_response`** - Generates short customer-facing response in German, based only on verified part number and stock quantity, including approximate restock time if out of stock. 
+
+**State:** A shared `TypeDict`(`WorkFlowState`) is passed between nodes, carrying the customer question, extracted part number, stock quantity, drafted response and a potential error. Each node checks for an existing error and skips its own logic if one exists, so a fail propagates cleanly to the end.
+
+**Human approval checkpoint:** After the draft is generated, it is displayed to the user together with the part number and stock level that were used. The user has to decide to approve or reject - nothing is sent automatically. If approved, an approval message is displayed (and in reality the message would be send), if rejected, this is also displayed. Both the approval and the rejection are logged separately. There is then also the option to start a new workflow.
+
+**Failure handling and fallback:** If `extract_part_number` cannot identify a known parameter with confidence, the workflow stops with an error instead of guessing. The user is then asked to provide the correct part number in a dropdown menu as a fallback, re-running only the remaining steps with the manually selected part number. If `check_inventory`cant find the part number in the inventory, there is a maximum of 2 retries before an error is returned and this is displayed.
+
+**Grounding issue which was fixed:** Early testing revealed that supplying both customer question and verified inventory facts lead to drafting a wrong response when the part number had to be manually adjusted before. This was fixed by instructing the model to mark the verified facts as authoritative.
 
 ## 5. Hyperscaler deployment assumptions and miminum setup required
 
-TODO
+**Existing Cloud Infrastructure:** As stated, the organization has already initiated the migration of selected workloads to a public cloud hyperscaler (e.g. AWS, Azure, ...). The application is built in a modular, container-ready way (via streamlit and python) which can easily be integrated to existing cloud environments. Due to the lack of an in-house GenAI platform, the protoype relies on external APIs (openAI) which can also be changed to services offered by the respictive hyperscaler. 
+
+An example for service mapping on the Azure infrastructure could be the following:
+
+| Prototype component | Target Azure service |
+| --- | --- |
+| LLM & embeddings (OpenAI API) | Azure OpenAI Service |
+| Vector store (in-memory ChromaDB) | Azure AI Search |
+| Document storage (local `documents/` folder) | Azure Blob Storage |
+| Secrets (`.env` file) | Azure Key Vault |
+| Hosting (Streamlit Community Cloud) | Azure Container Apps via Docker|
+| Logging (`logs.jsonl`) | Azure Monitor / Application Insights |
+
+**Minimum setup for an initial pilot:** one Azure tenant with Azure OpenAI access approved, one Blob Storage container for source documents, one Azure AI Search instance, basic IAM roles for the application identity, and a single containerized deployment of the application.
+
+**At scale:** separate dev/test/prod environments, an automated document ingestion pipeline (e.g. triggered on document upload rather than manual/full re-ingestion), load balancing for concurrent users, per-department access roles (see Section 6), and a monitoring dashboard tracking response quality and cost.
+
 
 ## 6. Security, Governance, responsible-AI controls
 

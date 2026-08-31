@@ -43,7 +43,7 @@ def extract_part_number_node(state: WorkflowState) -> WorkflowState:
 
 def check_inventory_node(state: WorkflowState) -> WorkflowState:
     if state.get("error"):
-        return state  # vorheriger Schritt ist bereits fehlgeschlagen, ueberspringen
+        return state 
 
     part_number = state["part_number"]
     max_retries = 2
