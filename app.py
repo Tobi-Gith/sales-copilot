@@ -121,34 +121,43 @@ with tab2:
     st.subheader("Ersatzteil-Anfrage bearbeiten")
     st.caption(f"Simulierter Lagerbestand: {INVENTORY}")
 
-    customer_question = st.text_area(
-        "Kundenanfrage:", "Ist Ersatzteil X-123 verfuegbar und wie lange dauert die Lieferung?"
-    )
-    part_number = st.selectbox("Betroffenes Ersatzteil:", list(INVENTORY.keys()))
+    if "workflow_result" not in st.session_state:
+        customer_question = st.text_area(
+            "Kundenanfrage:", "Ist Ersatzteil X-123 verfuegbar und wie lange dauert die Lieferung?"
+        )
+        part_number = st.selectbox("Betroffenes Ersatzteil:", list(INVENTORY.keys()))
 
-    if st.button("Workflow starten"):
-        try:
-            result = workflow_graph.invoke({
-                "customer_question": customer_question,
-                "part_number": part_number,
-                "stock_quantity": 0,
-                "draft": "",
-                "error": "",
-            })
-            log_event("agentic_workflow_run", {
-                "customer_question": mask_pii(customer_question),
-                "part_number": part_number,
-                "stock_quantity": result.get("stock_quantity"),
-                "error": result.get("error", ""),
-            })
-            st.session_state.workflow_result = result
-            st.session_state.workflow_decided = False
-        except Exception as e:
-            log_event("error", {"context": "agentic_workflow", "error_message": str(e)})
-            st.error("Beim Ausfuehren des Workflows ist ein Fehler aufgetreten.")
+        if st.button("Workflow starten"):
+            try:
+                result = workflow_graph.invoke({
+                    "customer_question": customer_question,
+                    "part_number": part_number,
+                    "stock_quantity": 0,
+                    "draft": "",
+                    "error": "",
+                })
+                log_event("agentic_workflow_run", {
+                    "customer_question": mask_pii(customer_question),
+                    "part_number": part_number,
+                    "stock_quantity": result.get("stock_quantity"),
+                    "error": result.get("error", ""),
+                })
+                st.session_state.workflow_result = result
+                st.session_state.workflow_part_number = part_number
+                st.session_state.workflow_customer_question = customer_question
+                st.session_state.workflow_decided = False
+                st.rerun()
+            except Exception as e:
+                log_event("error", {"context": "agentic_workflow", "error_message": str(e)})
+                st.error("Beim Ausfuehren des Workflows ist ein Fehler aufgetreten.")
 
-    if "workflow_result" in st.session_state:
+    else:
         result = st.session_state.workflow_result
+        part_number = st.session_state.workflow_part_number
+        customer_question = st.session_state.workflow_customer_question
+
+        st.write(f"**Kundenanfrage:** {customer_question}")
+        st.write(f"**Betroffenes Ersatzteil:** {part_number}")
 
         if result.get("error"):
             st.error(f"Workflow-Fehler: {result['error']}")
@@ -157,19 +166,32 @@ with tab2:
             st.write("**Entwurf zur Pruefung:**")
             st.info(result["draft"])
 
-            if not st.session_state.get("workflow_decided", False):
+            if not st.session_state.workflow_decided:
                 col1, col2 = st.columns(2)
                 if col1.button("✅ Freigeben und senden"):
                     log_event("agentic_workflow_approval", {
-                        "decision": "approved",
-                        "draft": mask_pii(result["draft"]),
+                        "decision": "approved", "draft": mask_pii(result["draft"]),
                     })
                     st.session_state.workflow_decided = True
-                    st.success("Freigegeben und (simuliert) gesendet.")
+                    st.session_state.workflow_decision = "approved"
+                    st.rerun()
                 if col2.button("❌ Ablehnen"):
                     log_event("agentic_workflow_approval", {
-                        "decision": "rejected",
-                        "draft": mask_pii(result["draft"]),
+                        "decision": "rejected", "draft": mask_pii(result["draft"]),
                     })
                     st.session_state.workflow_decided = True
+                    st.session_state.workflow_decision = "rejected"
+                    st.rerun()
+            else:
+                if st.session_state.workflow_decision == "approved":
+                    st.success("Freigegeben und (simuliert) gesendet.")
+                else:
                     st.warning("Entwurf abgelehnt. Kein Versand erfolgt.")
+
+        if st.button("🔄 Neue Anfrage starten"):
+            del st.session_state.workflow_result
+            del st.session_state.workflow_part_number
+            del st.session_state.workflow_customer_question
+            del st.session_state.workflow_decided
+            del st.session_state.workflow_decision
+            st.rerun()
