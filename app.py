@@ -141,7 +141,7 @@ with tab2:
                     "customer_question": customer_question,
                     "part_number": None,
                     "stock_quantity": 0,
-                    "unit_price": 0.0,
+                    "unit_price": None,
                     "draft": "",
                     "error": "",
                 })
@@ -149,6 +149,7 @@ with tab2:
                     "customer_question": mask_pii(customer_question),
                     "part_number": result.get("part_number"),
                     "stock_quantity": result.get("stock_quantity"),
+                    "unit_price": result.get("unit_price"),
                     "error": result.get("error", ""),
                 })
                 st.session_state.workflow_result = result
@@ -174,7 +175,7 @@ with tab2:
                     "customer_question": customer_question,
                     "part_number": manual_part,
                     "stock_quantity": 0,
-                    "unit_price": 0.0,
+                    "unit_price": None,
                     "draft": "",
                     "error": "",
                 })
@@ -182,6 +183,7 @@ with tab2:
                     "customer_question": mask_pii(customer_question),
                     "part_number": manual_part,
                     "stock_quantity": result2.get("stock_quantity"),
+                    "unit_price": result2.get("unit_price"),
                     "error": result2.get("error", ""),
                     "manual_override": True,
                 })

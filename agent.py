@@ -15,7 +15,7 @@ class WorkflowState(TypedDict):
     customer_question: str
     part_number: Optional[str]
     stock_quantity: int
-    unit_price: float
+    unit_price: Optional[float]
     draft: str
     error: str
 
