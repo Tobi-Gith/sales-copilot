@@ -48,8 +48,8 @@ No automated evaluation framework was set up given the time budget. This is note
 **Steps (LangGraph nodes):** 
 
 1. **`Extract part number`** - customers text question is passed to LLM which looks for the product number involved and returns it in JSON format (`response_format={"type": "json_object"}`). If no suitable product number is found by the LLM, a human needs to select the correct product number.
-2. **`check_inventory`** - Looks up the extracted part number in the simulated inventory dictionary. This is wrapped in a retry loop with up to 2 retries to demonstrate resilience against transient failure. 
-3. **`draft_response`** - Generates short customer-facing response in German, based only on verified part number and stock quantity, including approximate restock time if out of stock. 
+2. **`check_inventory`** - Looks up the extracted part number in the simulated inventory and price dictionary. This is wrapped in a retry loop with up to 2 retries to demonstrate resilience against transient failure. 
+3. **`draft_response`** - Generates short customer-facing response in German, based only on verified part number, stock quantity and price, including approximate restock time if out of stock. 
 
 **State:** A shared `TypeDict`(`WorkFlowState`) is passed between nodes, carrying the customer question, extracted part number, stock quantity, drafted response and a potential error. Each node checks for an existing error and skips its own logic if one exists, so a fail propagates cleanly to the end.
 
