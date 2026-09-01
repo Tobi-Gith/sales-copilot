@@ -132,10 +132,10 @@ with tab2:
 
     if "workflow_result" not in st.session_state:
         customer_question = st.text_area(
-            "Kundenanfrage:", "Ist Ersatzteil X-123 verfuegbar und wie lange dauert die Lieferung?"
+            "Kundenanfrage:", "", placeholder="Ist Ersatzteil X-123 verfuegbar und wie lange dauert die Lieferung?"
         )
 
-        if st.button("Workflow starten"):
+        if st.button("Workflow starten", disabled=not customer_question.strip()):
             try:
                 result = workflow_graph.invoke({
                     "customer_question": customer_question,
