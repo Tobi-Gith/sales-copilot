@@ -8,12 +8,14 @@ load_dotenv()
 client = OpenAI()
 
 INVENTORY = {"X-123": 12, "Y-456": 0}
+PRICES = {"X-123": 4850.00, "Y-456": 1240.00}
 
 
 class WorkflowState(TypedDict):
     customer_question: str
     part_number: Optional[str]
     stock_quantity: int
+    unit_price: float
     draft: str
     error: str
 
@@ -50,10 +52,11 @@ def check_inventory_node(state: WorkflowState) -> WorkflowState:
     for attempt in range(max_retries + 1):
         try:
             quantity = INVENTORY[part_number]
-            return {**state, "stock_quantity": quantity, "error": ""}
+            price = PRICES[part_number]
+            return {**state, "stock_quantity": quantity, "unit_price": price, "error": ""}
         except KeyError:
             if attempt == max_retries:
-                return {**state, "error": f"Ersatzteil {part_number} nicht gefunden."}
+                return {**state, "error": f"Lagerbestand/Preis für {part_number} konnte nicht gefunden."}
     return state
 
 
@@ -66,14 +69,17 @@ def draft_response_node(state: WorkflowState) -> WorkflowState:
         f"abweichende Bezeichnungen enthalten): \"{state['customer_question']}\"\n\n"
         f"Verifizierte Fakten (verbindlich, nutze ausschliesslich diese Werte):\n"
         f"- Ersatzteilnummer: {state['part_number']}\n"
-        f"- Lagerbestand: {state['stock_quantity']} Stueck\n\n"
+        f"- Lagerbestand: {state['stock_quantity']} Stueck\n"
+        f"- Stueckpreis (netto): {state['unit_price']:.2f} EUR\n\n"
         "Formuliere eine kurze, freundliche Kundenantwort auf Deutsch. Beziehe dich dabei "
-        "ausschliesslich auf die oben genannte Ersatzteilnummer und den Lagerbestand - "
-        "nicht auf eine eventuell abweichende Bezeichnung aus der Kundenanfrage. "
-        "Wenn der Lagerbestand groesser als 0 ist, bestaetige die Verfuegbarkeit mit der "
-        "genannten Stueckzahl. Wenn der Lagerbestand 0 ist, informiere hoeflich ueber die "
-        "Nichtverfuegbarkeit und eine ungefaehre Nachlieferzeit von 2 Wochen. "
-        "Erfinde keine zusaetzlichen Informationen, insbesondere keine anderen Zahlen."
+        "ausschliesslich auf die oben genannte Ersatzteilnummer, den Lagerbestand und den "
+        "Stueckpreis - nicht auf eine eventuell abweichende Bezeichnung aus der Kundenanfrage. "
+        "Wenn nach mehreren Stueck gefragt wird, berechne den Gesamtpreis (Stueckpreis mal "
+        "angefragte Menge) und nenne ihn explizit. Wenn der Lagerbestand groesser als 0 ist, "
+        "bestaetige die Verfuegbarkeit mit der genannten Stueckzahl. Wenn der Lagerbestand 0 "
+        "ist, informiere hoeflich ueber die Nichtverfuegbarkeit und eine ungefaehre "
+        "Nachlieferzeit von 2 Wochen. Erfinde keine zusaetzlichen Informationen, insbesondere "
+        "keine anderen Zahlen."
     )
 
     response = client.chat.completions.create(

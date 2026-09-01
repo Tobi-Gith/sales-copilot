@@ -141,6 +141,7 @@ with tab2:
                     "customer_question": customer_question,
                     "part_number": None,
                     "stock_quantity": 0,
+                    "unit_price": 0.0,
                     "draft": "",
                     "error": "",
                 })
@@ -173,6 +174,7 @@ with tab2:
                     "customer_question": customer_question,
                     "part_number": manual_part,
                     "stock_quantity": 0,
+                    "unit_price": 0.0,
                     "draft": "",
                     "error": "",
                 })
@@ -188,6 +190,7 @@ with tab2:
         else:
             st.caption(f"Erkanntes Ersatzteil: {result['part_number']}")
             st.write(f"**Lagerbestand:** {result['stock_quantity']} Stueck")
+            st.write(f"**Stueckpreis (netto):** {result['unit_price']:.2f} EUR")
             st.write("**Entwurf zur Pruefung:**")
             st.info(result["draft"])
 
