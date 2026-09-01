@@ -41,7 +41,6 @@ It is combined with an agentic workflow for automatically drafting a customer-se
 
 No automated evaluation framework was set up given the time budget. This is noted as one of the next steps in section 7.
 
-
 ## 4. Agentic workflow
 
 **Scenario:** A customer service employee receives a customer question about a spare part. The workflow checks the (simulated) inventory for the relevant part and drafts a customer-facing response, which a human must approve before it is considered "sent".
@@ -79,7 +78,6 @@ An example for service mapping on the Azure infrastructure could be the followin
 
 **At scale:** separate dev/test/prod environments, an automated document ingestion pipeline (e.g. triggered on document upload rather than manual/full re-ingestion), load balancing for concurrent users, per-department access roles (see Section 6), and a monitoring dashboard tracking response quality and cost.
 
-
 ## 6. Security, Governance, responsible-AI controls
 
 The client raised 5 specific concerns which are addressed as follows:
@@ -98,11 +96,40 @@ Responsibility and transparency is in general also adressd by the telemetry whic
 
 **Logging:** Every RAG query logs the prompt, retrieved sources, and response. Every agentic workflow run logs the extracted/selected part number, stock result, and any error. The human approval decision (approved/rejected) is logged separately from the automated run. Errors in either flow are caught and logged with the error message. All entries are timestamped in `Europe/Berlin` local time and written as JSON Lines (`logs.jsonl`).
 
-
 ## 7. Limitations, trade-offs, and next improvements
 
-TODO
+- **No access controls:** As noted, the prototype does not involve a user system which would be required to use it in reality later for access controls
+- **No conversation memory:** Each RAG question is answered idependently, so follow up questions like "and what does it cost?" cannot be answered. This was deliberate scope and not oversight, because implementing query writing is not necessary for the first protoype. 
+- **Fixed top-k retrieval:** For each answer, the 3 closest chunks are used, regardless of wether information of each one is needed. This can on the one hand be a little bit confusing when stated at the bottom of the answer, but is also needed on the other hand in case some more complex questions require information from several documents. Also, to ensure transparency, the model states the explicit source used after each information given additionaly. 
+- **In-memory vector store:** Rebuilt from source documents every time the app starts, wnich is acceptable for the prototype and was used to avoid issues on streamlit cloud. In production this would nevertheless need to be changed.
+- **No automated evaluation:** RAG and agentic outputs were only tested manually rather than with automated evaluation which would need to be implemented in the next steps.
+- **Simulated inventory and no real sending:** The inventory is at the moment just hard-coded. Also no message is really send which would need to be linked to the user system in the next steps.
+- **UI/UX:** The chat window jumps to the bottom after the answer is generated and also the switch between would be nicer to have fixed up top which are both due to limitations in streamlit but would also be changed in the next steps, relatively easy due to migration to hyper scaler.
 
 ## 8. Run instructions
 
-TODO
+1. Clone the repository and navigate into the project folder:
+
+git clone https://github.com/Tobi-Gith/sales-copilot.git
+cd sales-copilot
+
+2. Create and activate a virtual environment:
+
+python3 -m venv venv
+source venv/bin/activate
+
+3. Install dependencies:
+
+pip install -r requirements.txt
+
+4. Create a `.env`file in the project root with your OpenAI API key:
+
+OPENAI_API_KEY=your-key-here
+
+5. Run the app:
+
+streamlit run app.py
+
+6. The app automatically opens at `http://localhost:8501`. The "Fragen & Antworten" tab provides the RAG chat; the "Agentic Workflow" tab provides the spare-part inquiry workflow.
+
+A live deployed version is available at: TODO

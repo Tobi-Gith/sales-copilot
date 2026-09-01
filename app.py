@@ -55,72 +55,76 @@ with tab1:
     if "feedback_given" not in st.session_state:
         st.session_state.feedback_given = set()
 
-    for i, message in enumerate(st.session_state.messages):
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
-            if message["role"] == "assistant" and i not in st.session_state.feedback_given:
-                col1, col2 = st.columns([1, 10])
-                if col1.button("👍", key=f"up_{i}"):
-                    log_event("user_feedback", {"message_index": i, "feedback": "positive"})
-                    st.session_state.feedback_given.add(i)
-                    st.rerun()
-                if col2.button("👎", key=f"down_{i}"):
-                    log_event("user_feedback", {"message_index": i, "feedback": "negative"})
-                    st.session_state.feedback_given.add(i)
-                    st.rerun()
+    chat_container = st.container(height=500)
+    with chat_container:
+        for i, message in enumerate(st.session_state.messages):
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+                if message["role"] == "assistant" and i not in st.session_state.feedback_given:
+                    col1, col2 = st.columns([1, 10])
+                    if col1.button("👍", key=f"up_{i}"):
+                        log_event("user_feedback", {"message_index": i, "feedback": "positive"})
+                        st.session_state.feedback_given.add(i)
+                        st.rerun()
+                    if col2.button("👎", key=f"down_{i}"):
+                        log_event("user_feedback", {"message_index": i, "feedback": "negative"})
+                        st.session_state.feedback_given.add(i)
+                        st.rerun()
 
-    question = st.chat_input("Deine Frage an die Dokumentation:")
+        # Falls die letzte Nachricht eine noch unbeantwortete Nutzerfrage ist: jetzt beantworten
+        if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
+            question = st.session_state.messages[-1]["content"]
+            with st.chat_message("assistant"):
+                with st.spinner("Antwort wird generiert..."):
+                    try:
+                        q_embedding = client.embeddings.create(
+                            model="text-embedding-3-small", input=question
+                        ).data[0].embedding
 
-    if question:
-        st.session_state.messages.append({"role": "user", "content": question})
-        with st.chat_message("user"):
-            st.write(question)
+                        results = collection.query(query_embeddings=[q_embedding], n_results=3)
+                        chunks = results["documents"][0]
+                        sources = [m["source"] for m in results["metadatas"][0]]
+                        context = "\n\n".join(f"[Quelle: {s}]\n{c}" for s, c in zip(sources, chunks))
 
-        try:
-            q_embedding = client.embeddings.create(
-                model="text-embedding-3-small", input=question
-            ).data[0].embedding
+                        system_prompt = (
+                            "Du bist ein Assistent fuer Vertriebs- und Servicemitarbeiter. "
+                            "Antworte ausschliesslich basierend auf dem gegebenen Kontext. "
+                            "Wenn die Information nicht im Kontext steht, sage das explizit "
+                            "statt zu raten. Nenne bei jeder Aussage die Quelle in eckigen Klammern."
+                        )
 
-            results = collection.query(query_embeddings=[q_embedding], n_results=3)
-            chunks = results["documents"][0]
-            sources = [m["source"] for m in results["metadatas"][0]]
-            context = "\n\n".join(f"[Quelle: {s}]\n{c}" for s, c in zip(sources, chunks))
+                        response = client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": f"Kontext:\n{context}\n\nFrage: {question}"}
+                            ]
+                        )
+                        answer = response.choices[0].message.content
+                        sources_line = "\n\n*Quellen: " + ", ".join(set(sources)) + "*"
+                        full_answer = answer + sources_line
 
-            system_prompt = (
-                "Du bist ein Assistent fuer Vertriebs- und Servicemitarbeiter. "
-                "Antworte ausschliesslich basierend auf dem gegebenen Kontext. "
-                "Wenn die Information nicht im Kontext steht, sage das explizit "
-                "statt zu raten. Nenne bei jeder Aussage die Quelle in eckigen Klammern."
-            )
+                        log_event("rag_query", {
+                            "prompt": mask_pii(question),
+                            "retrieved_sources": list(set(sources)),
+                            "response": mask_pii(answer),
+                        })
+                        st.session_state.messages.append({"role": "assistant", "content": full_answer})
 
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": f"Kontext:\n{context}\n\nFrage: {question}"}
-                ]
-            )
-            answer = response.choices[0].message.content
-            sources_line = "\n\n*Quellen: " + ", ".join(set(sources)) + "*"
-            full_answer = answer + sources_line
+                    except Exception as e:
+                        log_event("error", {
+                            "prompt": mask_pii(question),
+                            "error_message": str(e),
+                        })
+                        error_msg = "Entschuldigung, bei der Verarbeitung deiner Frage ist ein Fehler aufgetreten. Bitte versuche es erneut."
+                        st.session_state.messages.append({"role": "assistant", "content": error_msg})
 
-            log_event("rag_query", {
-                "prompt": mask_pii(question),
-                "retrieved_sources": list(set(sources)),
-                "response": mask_pii(answer),
-            })
-
-            st.session_state.messages.append({"role": "assistant", "content": full_answer})
             st.rerun()
 
-        except Exception as e:
-            log_event("error", {
-                "prompt": mask_pii(question),
-                "error_message": str(e),
-            })
-            error_msg = "Entschuldigung, bei der Verarbeitung deiner Frage ist ein Fehler aufgetreten. Bitte versuche es erneut."
-            st.session_state.messages.append({"role": "assistant", "content": error_msg})
-            st.rerun()
+    new_question = st.chat_input("Deine Frage an die Dokumentation:")
+    if new_question:
+        st.session_state.messages.append({"role": "user", "content": new_question})
+        st.rerun()
 
 with tab2:
     st.subheader("Ersatzteil-Anfrage bearbeiten")
