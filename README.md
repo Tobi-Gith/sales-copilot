@@ -104,7 +104,6 @@ Responsibility and transparency is in general also adressd by the telemetry whic
 - **In-memory vector store:** Rebuilt from source documents every time the app starts, wnich is acceptable for the prototype and was used to avoid issues on streamlit cloud. In production this would nevertheless need to be changed.
 - **No automated evaluation:** RAG and agentic outputs were only tested manually rather than with automated evaluation which would need to be implemented in the next steps.
 - **Simulated inventory and no real sending:** The inventory is at the moment just hard-coded. Also no message is really send which would need to be linked to the user system in the next steps.
-- **UI/UX:** The chat window jumps to the bottom after the answer is generated and also the switch between would be nicer to have fixed up top which are both due to limitations in streamlit but would also be changed in the next steps, relatively easy due to migration to hyper scaler.
 
 ## 8. Run instructions
 
