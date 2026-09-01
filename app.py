@@ -71,7 +71,6 @@ with tab1:
                         st.session_state.feedback_given.add(i)
                         st.rerun()
 
-        # Falls die letzte Nachricht eine noch unbeantwortete Nutzerfrage ist: jetzt beantworten
         if st.session_state.messages and st.session_state.messages[-1]["role"] == "user":
             question = st.session_state.messages[-1]["content"]
             with st.chat_message("assistant"):
